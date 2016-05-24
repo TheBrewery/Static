@@ -23,9 +23,19 @@ public class DataSource: NSObject {
             updateTableView()
         }
     }
-
+    
+    private var oldSections: [Section]?
+    
+    private var indexPaths = [NSIndexPath]()
+    
+    
     /// Sections to use in the table view.
+    
     public var sections: [Section] {
+        willSet {
+            oldSections = sections
+        }
+        
         didSet {
             assert(NSThread.isMainThread(), "You must access Static.DataSource from the main thread.")
             refresh()
@@ -84,8 +94,8 @@ public class DataSource: NSObject {
     }
 
     private func refresh() {
-        refreshTableSections()
         refreshRegisteredCells()
+        refreshTableSections()
     }
 
     private func sectionForIndex(index: Int) -> Section? {
@@ -108,34 +118,69 @@ public class DataSource: NSObject {
         assert(false, "Invalid index path: \(indexPath)")
         return nil
     }
-
-    private func refreshTableSections(oldSections: [Section]? = nil) {
+    
+    private func refreshTableSections() {
         guard let tableView = tableView else { return }
-        guard let oldSections = oldSections else {
+        guard var oldSections = self.oldSections where oldSections.count > 0 else {
             tableView.reloadData()
             return
         }
 
-        let oldCount = oldSections.count
-        let newCount = sections.count
-        let delta = newCount - oldCount
+        let oldSectionCount = oldSections.count
+        let newSectionCount = sections.count
+        let sectionDelta = newSectionCount - oldSectionCount
         let animation: UITableViewRowAnimation = .Automatic
 
         tableView.beginUpdates()
 
-        if delta == 0 {
-            tableView.reloadSections(NSIndexSet(indexesInRange: NSMakeRange(0, newCount)), withRowAnimation: animation)
+        if sectionDelta == 0 {
+            var updatedIndexPaths = [NSIndexPath]()
+            var insertedIndexPaths = [NSIndexPath]()
+            var deletedIndexPaths = [NSIndexPath]()
+            
+            for (sectionIndex, section) in sections.enumerate() {
+                let oldSection = oldSections[sectionIndex]
+                
+                let endIndexOfOldSection = oldSection.rows.indices.endIndex
+                let endIndexOfSection = section.rows.indices.endIndex
+                
+
+                if endIndexOfSection < endIndexOfOldSection {
+                // The old section has more rows than the new sections so we should delete them
+                    let deletes = (endIndexOfSection..<endIndexOfOldSection).map {
+                        NSIndexPath(forRow: $0, inSection: sectionIndex)
+                    }
+                    deletedIndexPaths.appendContentsOf(deletes)
+                }
+                
+                for (rowIndex, row) in section.rows.enumerate() {
+                    if oldSection.rows.indices.contains(rowIndex) {
+                    // The index path already exists in the table view
+                        if !(row === oldSection.rows[rowIndex]) {
+                            // The row is not identical to the old row
+                            updatedIndexPaths.append(NSIndexPath(forRow: rowIndex, inSection: sectionIndex))
+                        }
+                    } else {
+                        // The index path does not exists in the table view
+                        insertedIndexPaths.append(NSIndexPath(forRow: rowIndex, inSection: sectionIndex))
+                    }
+                }
+            }
+            
+            tableView.deleteRowsAtIndexPaths(deletedIndexPaths, withRowAnimation: animation)
+            tableView.reloadRowsAtIndexPaths(updatedIndexPaths, withRowAnimation: animation)
+            tableView.insertRowsAtIndexPaths(insertedIndexPaths, withRowAnimation: animation)
         } else {
-            if delta > 0 {
+            if sectionDelta > 0 {
                 // Insert sections
-                tableView.insertSections(NSIndexSet(indexesInRange: NSMakeRange(oldCount - 1, delta)), withRowAnimation: animation)
+                tableView.insertSections(NSIndexSet(indexesInRange: NSMakeRange(newSectionCount - 1, sectionDelta)), withRowAnimation: animation)
             } else {
                 // Remove sections
-                tableView.deleteSections(NSIndexSet(indexesInRange: NSMakeRange(oldCount - 1, -delta)), withRowAnimation: animation)
+                tableView.deleteSections(NSIndexSet(indexesInRange: NSMakeRange(newSectionCount - 1, -sectionDelta)), withRowAnimation: animation)
             }
 
             // Reload existing sections
-            let commonCount = min(oldCount, newCount)
+            let commonCount = min(oldSectionCount, newSectionCount)
             tableView.reloadSections(NSIndexSet(indexesInRange: NSMakeRange(0, commonCount)), withRowAnimation: animation)
         }
 
@@ -213,6 +258,13 @@ extension DataSource: UITableViewDataSource {
 
     public func tableView(tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
         return sectionForIndex(section)?.footer?.viewHeight ?? UITableViewAutomaticDimension
+    }
+    
+    public func tableView(tableView: UITableView, heightForRowAtIndexPath indexPath: NSIndexPath) -> CGFloat {
+        guard let customView = sectionForIndex(indexPath.section)?.rows[indexPath.row].customView else {
+            return 44
+        }
+        return customView.frame.height
     }
 
     public func tableView(tableView: UITableView, canEditRowAtIndexPath indexPath: NSIndexPath) -> Bool {

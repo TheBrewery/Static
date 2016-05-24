@@ -86,6 +86,9 @@ public struct Row: Hashable, Equatable {
     }
 
     // MARK: - Properties
+    
+    /// A content view for the cell.
+    public var customView: UIView?
 
     /// Unique identifier for the row.
     public let UUID: String
@@ -133,9 +136,9 @@ public struct Row: Hashable, Equatable {
 
     // MARK: - Initializers
 
-    public init(text: String? = nil, detailText: String? = nil, selection: Selection? = nil,
+    public init(text: String? = nil, detailText: String? = nil, customView: UIView? = nil, selection: Selection? = nil,
         image: UIImage? = nil, accessory: Accessory = .None, cellClass: CellType.Type? = nil, context: Context? = nil, editActions: [EditAction] = [], UUID: String = NSUUID().UUIDString) {
-        
+        self.customView = customView
         self.UUID = UUID
         self.text = text
         self.detailText = detailText
@@ -164,4 +167,16 @@ public func ==(lhs: Row.Accessory, rhs: Row.Accessory) -> Bool {
     case (.View(let l), .View(let r)): return l == r
     default: return false
     }
+}
+
+// Is identical
+public func ===(lhs: Row, rhs: Row) -> Bool {
+    return lhs.UUID == rhs.UUID &&
+    lhs.customView == rhs.customView &&
+    lhs.text == rhs.text &&
+    lhs.detailText == rhs.detailText &&
+    lhs.detailText == rhs.detailText &&
+    lhs.image == rhs.image &&
+    lhs.accessory == rhs.accessory &&
+    lhs.cellClass == rhs.cellClass
 }

@@ -20,5 +20,9 @@ extension CellType where Self: UITableViewCell {
         imageView?.image = row.image
         accessoryType = row.accessory.type
         accessoryView = row.accessory.view
+        
+        if let customView = row.customView {
+            contentView.addSubview(customView)
+        }
     }
 }
